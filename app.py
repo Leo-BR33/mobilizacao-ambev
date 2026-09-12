@@ -42,8 +42,7 @@ st.markdown("""
         margin-bottom: 15px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
-    .badge-cep { background-color: #F3F4F6; color: #1F2937; padding: 3px 8px; border-radius: 5px; font-weight: bold; font-size: 13px; }
-    .badge-bairro { background-color: #FEF3C7; color: #92400E; padding: 3px 8px; border-radius: 5px; font-weight: bold; font-size: 13px; }
+    .badge-bairro { background-color: #FEF3C7; color: #92400E; padding: 4px 10px; border-radius: 5px; font-weight: bold; font-size: 13px; display: inline-block; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -58,13 +57,6 @@ st.markdown("""
 def limpar_apenas_numeros(texto):
     if pd.isna(texto): return ""
     return re.sub(r'[\.\-\/\\ ]', '', str(texto)).strip()
-
-def formatar_cep(valor):
-    if pd.isna(valor) or str(valor).strip() in ['', 'nan', 'None']: return "Não informado"
-    nums = limpar_apenas_numeros(str(valor).replace('.0', ''))
-    if len(nums) == 7: nums = nums.zfill(8)
-    if len(nums) == 8: return f"{nums[:5]}-{nums[5:]}"
-    return str(valor).strip()
 
 def formatar_latitude(valor):
     if pd.isna(valor) or str(valor).strip() in ['', 'nan', 'None']: return None
@@ -102,7 +94,6 @@ def formatar_longitude(valor):
 @st.cache_data(ttl=300)
 def carregar_prospects():
     try:
-        # Lê base_prospects.xlsx ou a própria base_clientes.xlsx caso prefira manter o nome
         nome_arquivo = 'base_prospects.xlsx'
         try:
             excel_file = pd.ExcelFile(nome_arquivo, engine='openpyxl')
@@ -122,9 +113,9 @@ def carregar_prospects():
             if c_clean in ['lat', 'latitude']: data.rename(columns={col: 'Latitude'}, inplace=True)
             elif c_clean in ['long', 'lng', 'longitude']: data.rename(columns={col: 'Longitude'}, inplace=True)
             elif c_clean in ['bairro', 'bairros']: data.rename(columns={col: 'Bairro'}, inplace=True)
-            elif c_clean in ['nomefantasia', 'fantasia', 'nome']: data.rename(columns={col: 'Nome_Fantasia'}, inplace=True)
+            elif c_clean in ['nomefantasia', 'fantasia', 'nome', 'pdv', 'nomedopdv']: data.rename(columns={col: 'Nome_Fantasia'}, inplace=True)
 
-        for col_esperada in ['Nome_Fantasia', 'Razao_Social', 'Bairro', 'Cidade', 'Endereco', 'CEP', 'Telefone']:
+        for col_esperada in ['Nome_Fantasia', 'Bairro', 'Cidade', 'Endereco', 'Telefone']:
             if col_esperada in data.columns: data[col_esperada] = data[col_esperada].astype(str)
             else: data[col_esperada] = ""
 
@@ -155,7 +146,6 @@ tab_lista, tab_mapa = st.tabs(["📍 Buscar por Bairro", "🗺️ Mapa Geral de 
 with tab_lista:
     st.markdown("### 🔍 Filtrar Alvos por Bairro")
 
-    # Lista de bairros ordenados
     bairros_validos = sorted([
         b for b in df['Bairro'].unique() 
         if str(b).strip() and str(b).lower() not in ['nan', 'none', '']
@@ -174,23 +164,19 @@ with tab_lista:
         df_filtrado = df_filtrado[df_filtrado['Bairro'] == bairro_escolhido]
 
     if busca_nome:
-        df_filtrado = df_filtrado[
-            df_filtrado['Nome_Fantasia'].str.contains(busca_nome, case=False, na=False) |
-            df_filtrado['Razao_Social'].str.contains(busca_nome, case=False, na=False)
-        ]
+        df_filtrado = df_filtrado[df_filtrado['Nome_Fantasia'].str.contains(busca_nome, case=False, na=False)]
 
     st.caption(f"🎯 PDVs encontrados: **{len(df_filtrado)}**")
 
     if not df_filtrado.empty:
         for idx, row in df_filtrado.iterrows():
             nome_pdv = row['Nome_Fantasia'].strip()
-            if not nome_pdv or nome_pdv.lower() == 'nan':
-                nome_pdv = row['Razao_Social'].strip() or "PDV Prospect"
+            if not nome_pdv or nome_pdv.lower() in ['nan', 'none']:
+                nome_pdv = "PDV Prospect"
 
             bairro = row['Bairro'].strip() or "Bairro não informado"
             cidade = row['Cidade'].strip()
             endereco = row['Endereco'].strip() or "Endereço não informado"
-            cep_fmt = formatar_cep(row.get('CEP', ''))
 
             # Telefone e WhatsApp
             tel = row['Telefone'].replace('.0', '').strip()
@@ -223,7 +209,6 @@ with tab_lista:
                 <h3 style="margin-top:0; color:#001489;">🏬 {nome_pdv}</h3>
                 <div style="margin-top: 8px;">
                     <span class="badge-bairro">📍 {bairro}</span>
-                    <span class="badge-cep">📮 CEP: {cep_fmt}</span>
                 </div>
                 <div style="margin-top: 8px; font-size: 14px; color: #374151;">
                     <strong>Endereço:</strong> {endereco} {f'- {cidade}' if cidade else ''}<br>
@@ -258,7 +243,6 @@ with tab_mapa:
     st.markdown("### 🗺️ Mapa Panorâmico da Mobilização")
     st.write("Veja onde estão concentrados todos os alvos e trace rotas pelo Google Maps.")
 
-    # Filtro opcional de bairro para o mapa geral
     col_m1, col_m2 = st.columns([2, 2])
     with col_m1:
         bairro_mapa = st.selectbox("Filtrar Bairro no Mapa:", opcoes_bairros, key="sb_mapa_geral")
@@ -272,7 +256,6 @@ with tab_mapa:
     st.info(f"📍 **{len(df_mapa)}** PDVs geolocalizados exibidos no mapa.")
 
     if not df_mapa.empty:
-        # Mapa nativo do Streamlit
         st.map(
             df_mapa,
             latitude='lat',
@@ -284,7 +267,7 @@ with tab_mapa:
 
         st.markdown("#### 🚗 Traçar Rota Rápida no Google Maps")
         for m_idx, m_row in df_mapa.iterrows():
-            m_nome = m_row['Nome_Fantasia'].strip() or m_row['Razao_Social'].strip() or "PDV Prospect"
+            m_nome = m_row['Nome_Fantasia'].strip() or "PDV Prospect"
             m_bairro = m_row['Bairro'].strip()
             m_end = m_row['Endereco'].strip()
             rota_url = f"https://www.google.com/maps/dir/?api=1&destination={m_row['lat']},{m_row['lon']}"
