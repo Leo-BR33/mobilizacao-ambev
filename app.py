@@ -29,7 +29,7 @@ st.markdown("""
         font-size: 26px;
     }
     .header-box p {
-        color: #FBBF24; /* Amarelo Ambev */
+        color: #FBBF24;
         margin-top: 5px;
         font-size: 14px;
         font-weight: 600;
@@ -151,7 +151,7 @@ def carregar_prospects():
 
         for col_esperada in ['Nome_Fantasia', 'Bairro', 'Cidade', 'Endereco', 'Telefone']:
             if col_esperada in data.columns: 
-                data[col_esperada] = data[col_esperada].astype(str)
+                data[col_esperada] = data[col_esperada].fillna("").astype(str)
             else: 
                 data[col_esperada] = ""
 
@@ -247,18 +247,23 @@ with tab_busca:
         st.success(f"🎯 Foram encontrados **{len(df_resultado)}** PDVs.")
 
         for idx, row in df_resultado.iterrows():
-            nome_pdv = row['Nome_Fantasia'].strip()
+            nome_pdv = str(row.get('Nome_Fantasia', '')).strip()
             if not nome_pdv or nome_pdv.lower() in ['nan', 'none']:
                 nome_pdv = "PDV Prospect"
 
-            bairro = row['Bairro'].strip() or "Bairro não informado"
-            cidade = row['Cidade'].strip() or "Cidade não informada"
-            endereco = row['Endereco'].strip() or "Endereço não informado"
+            bairro = str(row.get('Bairro', '')).strip() or "Bairro não informado"
+            cidade = str(row.get('Cidade', '')).strip() or "Cidade não informada"
+            endereco = str(row.get('Endereco', '')).strip() or "Endereço não informado"
 
-            # Telefone e WhatsApp
-            tel = row['Telefone'].replace('.0', '').strip()
+            # Tratamento blindado de Telefone (evita AttributeError float)
+            tel_raw = str(row.get('Telefone', '')).strip()
+            if tel_raw.lower() in ['nan', 'none', '']:
+                tel = ""
+            else:
+                tel = tel_raw.replace('.0', '').strip()
+
             tel_clean = limpar_apenas_numeros(tel)
-            tem_tel = bool(tel_clean and tel.lower() not in ['nan', 'none', 'não informado'])
+            tem_tel = bool(tel_clean and tel_clean.lower() not in ['nan', 'none', 'naoinformado'])
             tel_link = f"https://wa.me/55{tel_clean}" if tem_tel else "#"
 
             # Geolocalização e Maps
@@ -333,7 +338,6 @@ with tab_mapa:
         opcoes_mapa_cid = ["Todas as Cidades"] + cidades_validas
         cid_mapa_sel = st.selectbox("Filtrar Cidade no Mapa:", opcoes_mapa_cid, key="sb_mapa_cid")
     with col_m2:
-        # Se filtrou a cidade, lista apenas bairros daquela cidade
         if cid_mapa_sel != "Todas as Cidades":
             bairros_cid = sorted([
                 b for b in df[df['Cidade'] == cid_mapa_sel]['Bairro'].unique() 
@@ -367,10 +371,10 @@ with tab_mapa:
 
         st.markdown("#### 🚗 Traçar Rota Rápida no Google Maps")
         for m_idx, m_row in df_mapa.iterrows():
-            m_nome = m_row['Nome_Fantasia'].strip() or "PDV Prospect"
-            m_bairro = m_row['Bairro'].strip()
-            m_cidade = m_row['Cidade'].strip()
-            m_end = m_row['Endereco'].strip()
+            m_nome = str(m_row.get('Nome_Fantasia', '')).strip() or "PDV Prospect"
+            m_bairro = str(m_row.get('Bairro', '')).strip()
+            m_cidade = str(m_row.get('Cidade', '')).strip()
+            m_end = str(m_row.get('Endereco', '')).strip()
             rota_url = f"https://www.google.com/maps/dir/?api=1&destination={m_row['lat']},{m_row['lon']}"
 
             col_pdv, col_rota = st.columns([3, 1])
