@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import re
 import urllib.parse
+import pydeck as pdk
 
 # 1. Configuração da Página para Mobile e Web
 st.set_page_config(
@@ -29,7 +30,7 @@ st.markdown("""
         font-size: 26px;
     }
     .header-box p {
-        color: #FBBF24;
+        color: #FBBF24; /* Amarelo Ambev */
         margin-top: 5px;
         font-size: 14px;
         font-weight: 600;
@@ -135,7 +136,6 @@ def carregar_prospects():
 
         data.columns = [str(c).strip() for c in data.columns]
 
-        # Mapeia variações de colunas
         for col in data.columns:
             c_clean = col.lower().replace('_', '').replace(' ', '')
             if c_clean in ['lat', 'latitude']: 
@@ -155,7 +155,6 @@ def carregar_prospects():
             else: 
                 data[col_esperada] = ""
 
-        # Coordenadas numéricas
         if 'Latitude' in data.columns: 
             data['lat'] = data['Latitude'].apply(formatar_latitude)
         else: 
@@ -177,7 +176,6 @@ if df.empty:
     st.info("👋 Suba a planilha 'base_prospects.xlsx' no seu repositório do GitHub para começar a mobilização.")
     st.stop()
 
-# Listas ordenadas para seletores
 cidades_validas = sorted([
     c for c in df['Cidade'].unique() 
     if str(c).strip() and str(c).lower() not in ['nan', 'none', '']
@@ -192,7 +190,7 @@ bairros_validos = sorted([
 tab_busca, tab_mapa = st.tabs(["🔎 Consulta de PDVs", "🗺️ Mapa Geral de Todos os PDVs"])
 
 # ==============================================================================
-# ABA 1: SISTEMA DE BUSCA (CIDADE, BAIRRO OU NOME)
+# ABA 1: SISTEMA DE BUSCA
 # ==============================================================================
 with tab_busca:
     st.markdown("### 🔎 Buscar Clientes Prospects")
@@ -208,7 +206,6 @@ with tab_busca:
     if criterio == "Por Cidade":
         opcoes_cidades = ["Selecione uma Cidade..."] + cidades_validas
         cidade_sel = st.selectbox("🏙️ Escolha a Cidade:", opcoes_cidades)
-        
         if cidade_sel != "Selecione uma Cidade...":
             df_resultado = df_resultado[df_resultado['Cidade'] == cidade_sel]
         else:
@@ -217,7 +214,6 @@ with tab_busca:
     elif criterio == "Por Bairro":
         opcoes_bairros = ["Selecione um Bairro..."] + bairros_validos
         bairro_sel = st.selectbox("📍 Escolha o Bairro:", opcoes_bairros)
-        
         if bairro_sel != "Selecione um Bairro...":
             df_resultado = df_resultado[df_resultado['Bairro'] == bairro_sel]
         else:
@@ -230,7 +226,7 @@ with tab_busca:
         else:
             df_resultado = pd.DataFrame()
 
-    else:  # Geral
+    else:
         termo_geral = st.text_input("🔍 Digite Cidade, Bairro ou Nome do PDV:", placeholder="Ex: São Luís, Cohatrac, Mercearia...")
         if termo_geral.strip():
             t = termo_geral.strip()
@@ -242,7 +238,6 @@ with tab_busca:
         else:
             df_resultado = pd.DataFrame()
 
-    # Exibição dos resultados
     if not df_resultado.empty:
         st.success(f"🎯 Foram encontrados **{len(df_resultado)}** PDVs.")
 
@@ -255,18 +250,12 @@ with tab_busca:
             cidade = str(row.get('Cidade', '')).strip() or "Cidade não informada"
             endereco = str(row.get('Endereco', '')).strip() or "Endereço não informado"
 
-            # Tratamento blindado de Telefone (evita AttributeError float)
             tel_raw = str(row.get('Telefone', '')).strip()
-            if tel_raw.lower() in ['nan', 'none', '']:
-                tel = ""
-            else:
-                tel = tel_raw.replace('.0', '').strip()
-
+            tel = "" if tel_raw.lower() in ['nan', 'none', ''] else tel_raw.replace('.0', '').strip()
             tel_clean = limpar_apenas_numeros(tel)
             tem_tel = bool(tel_clean and tel_clean.lower() not in ['nan', 'none', 'naoinformado'])
             tel_link = f"https://wa.me/55{tel_clean}" if tem_tel else "#"
 
-            # Geolocalização e Maps
             p_lat = row['lat']
             p_lng = row['lon']
             tem_gps = (p_lat is not None) and (p_lng is not None)
@@ -286,7 +275,6 @@ with tab_busca:
                 map_embed_url = None
                 pode_ver_mapa = False
 
-            # Card Visual
             st.markdown(f"""
             <div class="prospect-card">
                 <h3 style="margin-top:0; color:#001489;">🏬 {nome_pdv}</h3>
@@ -327,11 +315,11 @@ with tab_busca:
         st.info("👆 Selecione ou digite o filtro acima para consultar os alvos.")
 
 # ==============================================================================
-# ABA 2: MAPA GERAL COM FILTROS GEOGRÁFICOS
+# ABA 2: MAPA INTERATIVO (COM NOME FANTASIA AO CLICAR/TOCAR)
 # ==============================================================================
 with tab_mapa:
     st.markdown("### 🗺️ Mapa Panorâmico da Mobilização")
-    st.write("Veja onde estão concentrados todos os alvos e trace rotas pelo Google Maps.")
+    st.write("Toque ou clique em qualquer ponto amarelo para ver o **Nome Fantasia** e detalhes do PDV.")
 
     col_m1, col_m2 = st.columns(2)
     with col_m1:
@@ -360,13 +348,52 @@ with tab_mapa:
     st.info(f"📍 **{len(df_mapa)}** PDVs geolocalizados exibidos no mapa.")
 
     if not df_mapa.empty:
-        st.map(
-            df_mapa,
-            latitude='lat',
-            longitude='lon',
-            size=35,
-            color="#F59E0B",
-            use_container_width=True
+        # Pega a média das coordenadas para centralizar a câmera do mapa
+        centro_lat = float(df_mapa['lat'].mean())
+        centro_lon = float(df_mapa['lon'].mean())
+
+        # Camada interativa dos pontos
+        camada_pontos = pdk.Layer(
+            "ScatterplotLayer",
+            data=df_mapa,
+            get_position='[lon, lat]',
+            get_color='[245, 158, 11, 200]',  # Dourado Ambev vibrante
+            get_radius=40,                     # Tamanho do ponto
+            pickable=True,                     # Habilita clique e toque
+            auto_highlight=True,
+        )
+
+        # Configuração da visão inicial do mapa
+        estado_visao = pdk.ViewState(
+            latitude=centro_lat,
+            longitude=centro_lon,
+            zoom=12,
+            pitch=0
+        )
+
+        # Tooltip com Nome Fantasia e Endereço ao clicar/tocar
+        tooltip_config = {
+            "html": """
+                <div style="background-color: #001489; color: white; padding: 10px; border-radius: 8px; font-family: sans-serif;">
+                    <b style="font-size: 15px; color: #FBBF24;">🏬 {Nome_Fantasia}</b><br/>
+                    <span style="font-size: 12px;">📍 <b>Bairro:</b> {Bairro}</span><br/>
+                    <span style="font-size: 11px; color: #E2E8F0;">🏠 {Endereco}</span>
+                </div>
+            """,
+            "style": {
+                "border": "1px solid #FBBF24",
+                "zIndex": "1000"
+            }
+        }
+
+        # Renderiza o mapa interativo
+        st.pydeck_chart(
+            pdk.Deck(
+                layers=[camada_pontos],
+                initial_view_state=estado_visao,
+                tooltip=tooltip_config,
+                map_style="road"
+            )
         )
 
         st.markdown("#### 🚗 Traçar Rota Rápida no Google Maps")
