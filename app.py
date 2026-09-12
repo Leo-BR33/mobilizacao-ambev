@@ -42,7 +42,25 @@ st.markdown("""
         margin-bottom: 15px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
-    .badge-bairro { background-color: #FEF3C7; color: #92400E; padding: 4px 10px; border-radius: 5px; font-weight: bold; font-size: 13px; display: inline-block; }
+    .badge-bairro { 
+        background-color: #FEF3C7; 
+        color: #92400E; 
+        padding: 4px 10px; 
+        border-radius: 5px; 
+        font-weight: bold; 
+        font-size: 13px; 
+        display: inline-block; 
+    }
+    .badge-cidade { 
+        background-color: #E0F2FE; 
+        color: #0369A1; 
+        padding: 4px 10px; 
+        border-radius: 5px; 
+        font-weight: bold; 
+        font-size: 13px; 
+        display: inline-block; 
+        margin-left: 6px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -55,39 +73,50 @@ st.markdown("""
 
 # --- FUNÇÕES DE APOIO ---
 def limpar_apenas_numeros(texto):
-    if pd.isna(texto): return ""
+    if pd.isna(texto): 
+        return ""
     return re.sub(r'[\.\-\/\\ ]', '', str(texto)).strip()
 
 def formatar_latitude(valor):
-    if pd.isna(valor) or str(valor).strip() in ['', 'nan', 'None']: return None
+    if pd.isna(valor) or str(valor).strip() in ['', 'nan', 'None']: 
+        return None
     val_str = str(valor).strip().replace(',', '.')
     try:
         val_float = float(val_str)
-        if -90 <= val_float <= 90 and '.' in val_str: return val_float
-    except ValueError: pass
+        if -90 <= val_float <= 90 and '.' in val_str: 
+            return val_float
+    except ValueError: 
+        pass
 
     s = val_str.replace('.', '').replace(',', '').strip()
     sinal = "-" if s.startswith("-") else ""
     s = s.lstrip("-")
     if len(s) >= 2:
-        try: return float(f"{sinal}{s[:1]}.{s[1:]}")
-        except ValueError: return None
+        try: 
+            return float(f"{sinal}{s[:1]}.{s[1:]}")
+        except ValueError: 
+            return None
     return None
 
 def formatar_longitude(valor):
-    if pd.isna(valor) or str(valor).strip() in ['', 'nan', 'None']: return None
+    if pd.isna(valor) or str(valor).strip() in ['', 'nan', 'None']: 
+        return None
     val_str = str(valor).strip().replace(',', '.')
     try:
         val_float = float(val_str)
-        if -180 <= val_float <= 180 and '.' in val_str: return val_float
-    except ValueError: pass
+        if -180 <= val_float <= 180 and '.' in val_str: 
+            return val_float
+    except ValueError: 
+        pass
 
     s = val_str.replace('.', '').replace(',', '').strip()
     sinal = "-" if s.startswith("-") else ""
     s = s.lstrip("-")
     if len(s) >= 3:
-        try: return float(f"{sinal}{s[:2]}.{s[2:]}")
-        except ValueError: return None
+        try: 
+            return float(f"{sinal}{s[:2]}.{s[2:]}")
+        except ValueError: 
+            return None
     return None
 
 # --- LEITURA DA PLANILHA ---
@@ -101,30 +130,41 @@ def carregar_prospects():
             nome_arquivo = 'base_clientes.xlsx'
             excel_file = pd.ExcelFile(nome_arquivo, engine='openpyxl')
 
-        # Lê aba 'Prospects' ou a primeira disponível
         aba = 'Prospects' if 'Prospects' in excel_file.sheet_names else excel_file.sheet_names[0]
         data = pd.read_excel(excel_file, sheet_name=aba)
 
         data.columns = [str(c).strip() for c in data.columns]
 
-        # Mapeia colunas de nomes alternativos
+        # Mapeia variações de colunas
         for col in data.columns:
             c_clean = col.lower().replace('_', '').replace(' ', '')
-            if c_clean in ['lat', 'latitude']: data.rename(columns={col: 'Latitude'}, inplace=True)
-            elif c_clean in ['long', 'lng', 'longitude']: data.rename(columns={col: 'Longitude'}, inplace=True)
-            elif c_clean in ['bairro', 'bairros']: data.rename(columns={col: 'Bairro'}, inplace=True)
-            elif c_clean in ['nomefantasia', 'fantasia', 'nome', 'pdv', 'nomedopdv']: data.rename(columns={col: 'Nome_Fantasia'}, inplace=True)
+            if c_clean in ['lat', 'latitude']: 
+                data.rename(columns={col: 'Latitude'}, inplace=True)
+            elif c_clean in ['long', 'lng', 'longitude']: 
+                data.rename(columns={col: 'Longitude'}, inplace=True)
+            elif c_clean in ['bairro', 'bairros']: 
+                data.rename(columns={col: 'Bairro'}, inplace=True)
+            elif c_clean in ['cidade', 'municipio', 'cidades']: 
+                data.rename(columns={col: 'Cidade'}, inplace=True)
+            elif c_clean in ['nomefantasia', 'fantasia', 'nome', 'pdv', 'nomedopdv']: 
+                data.rename(columns={col: 'Nome_Fantasia'}, inplace=True)
 
         for col_esperada in ['Nome_Fantasia', 'Bairro', 'Cidade', 'Endereco', 'Telefone']:
-            if col_esperada in data.columns: data[col_esperada] = data[col_esperada].astype(str)
-            else: data[col_esperada] = ""
+            if col_esperada in data.columns: 
+                data[col_esperada] = data[col_esperada].astype(str)
+            else: 
+                data[col_esperada] = ""
 
-        # Coordenadas numéricas limpas
-        if 'Latitude' in data.columns: data['lat'] = data['Latitude'].apply(formatar_latitude)
-        else: data['lat'] = None
+        # Coordenadas numéricas
+        if 'Latitude' in data.columns: 
+            data['lat'] = data['Latitude'].apply(formatar_latitude)
+        else: 
+            data['lat'] = None
 
-        if 'Longitude' in data.columns: data['lon'] = data['Longitude'].apply(formatar_longitude)
-        else: data['lon'] = None
+        if 'Longitude' in data.columns: 
+            data['lon'] = data['Longitude'].apply(formatar_longitude)
+        else: 
+            data['lon'] = None
 
         return data
     except Exception as e:
@@ -137,45 +177,82 @@ if df.empty:
     st.info("👋 Suba a planilha 'base_prospects.xlsx' no seu repositório do GitHub para começar a mobilização.")
     st.stop()
 
+# Listas ordenadas para seletores
+cidades_validas = sorted([
+    c for c in df['Cidade'].unique() 
+    if str(c).strip() and str(c).lower() not in ['nan', 'none', '']
+])
+
+bairros_validos = sorted([
+    b for b in df['Bairro'].unique() 
+    if str(b).strip() and str(b).lower() not in ['nan', 'none', '']
+])
+
 # --- ABAS DA MOBILIZAÇÃO ---
-tab_lista, tab_mapa = st.tabs(["📍 Buscar por Bairro", "🗺️ Mapa Geral de Todos os PDVs"])
+tab_busca, tab_mapa = st.tabs(["🔎 Consulta de PDVs", "🗺️ Mapa Geral de Todos os PDVs"])
 
 # ==============================================================================
-# ABA 1: CONSULTA EXCLUSIVA POR BAIRRO
+# ABA 1: SISTEMA DE BUSCA (CIDADE, BAIRRO OU NOME)
 # ==============================================================================
-with tab_lista:
-    st.markdown("### 🔍 Filtrar Alvos por Bairro")
+with tab_busca:
+    st.markdown("### 🔎 Buscar Clientes Prospects")
 
-    bairros_validos = sorted([
-        b for b in df['Bairro'].unique() 
-        if str(b).strip() and str(b).lower() not in ['nan', 'none', '']
-    ])
-    opcoes_bairros = ["Todos os Bairros"] + bairros_validos
+    criterio = st.radio(
+        "Selecione como deseja pesquisar:",
+        ["Por Cidade", "Por Bairro", "Por Nome Fantasia", "Geral (Cidade, Bairro ou Nome)"],
+        horizontal=True
+    )
 
-    col1, col2 = st.columns([2, 2])
-    with col1:
-        bairro_escolhido = st.selectbox("Selecione o Bairro:", opcoes_bairros)
-    with col2:
-        busca_nome = st.text_input("Buscar por Nome:", placeholder="Ex: Galeteria, Bar do Zé...")
+    df_resultado = df.copy()
 
-    # Filtragem
-    df_filtrado = df.copy()
-    if bairro_escolhido != "Todos os Bairros":
-        df_filtrado = df_filtrado[df_filtrado['Bairro'] == bairro_escolhido]
+    if criterio == "Por Cidade":
+        opcoes_cidades = ["Selecione uma Cidade..."] + cidades_validas
+        cidade_sel = st.selectbox("🏙️ Escolha a Cidade:", opcoes_cidades)
+        
+        if cidade_sel != "Selecione uma Cidade...":
+            df_resultado = df_resultado[df_resultado['Cidade'] == cidade_sel]
+        else:
+            df_resultado = pd.DataFrame()
 
-    if busca_nome:
-        df_filtrado = df_filtrado[df_filtrado['Nome_Fantasia'].str.contains(busca_nome, case=False, na=False)]
+    elif criterio == "Por Bairro":
+        opcoes_bairros = ["Selecione um Bairro..."] + bairros_validos
+        bairro_sel = st.selectbox("📍 Escolha o Bairro:", opcoes_bairros)
+        
+        if bairro_sel != "Selecione um Bairro...":
+            df_resultado = df_resultado[df_resultado['Bairro'] == bairro_sel]
+        else:
+            df_resultado = pd.DataFrame()
 
-    st.caption(f"🎯 PDVs encontrados: **{len(df_filtrado)}**")
+    elif criterio == "Por Nome Fantasia":
+        nome_busca = st.text_input("🏢 Digite o Nome do PDV:", placeholder="Ex: Galeto, Bar do Silva, Mercado...")
+        if nome_busca.strip():
+            df_resultado = df_resultado[df_resultado['Nome_Fantasia'].str.contains(nome_busca.strip(), case=False, na=False)]
+        else:
+            df_resultado = pd.DataFrame()
 
-    if not df_filtrado.empty:
-        for idx, row in df_filtrado.iterrows():
+    else:  # Geral
+        termo_geral = st.text_input("🔍 Digite Cidade, Bairro ou Nome do PDV:", placeholder="Ex: São Luís, Cohatrac, Mercearia...")
+        if termo_geral.strip():
+            t = termo_geral.strip()
+            df_resultado = df_resultado[
+                df_resultado['Nome_Fantasia'].str.contains(t, case=False, na=False) |
+                df_resultado['Bairro'].str.contains(t, case=False, na=False) |
+                df_resultado['Cidade'].str.contains(t, case=False, na=False)
+            ]
+        else:
+            df_resultado = pd.DataFrame()
+
+    # Exibição dos resultados
+    if not df_resultado.empty:
+        st.success(f"🎯 Foram encontrados **{len(df_resultado)}** PDVs.")
+
+        for idx, row in df_resultado.iterrows():
             nome_pdv = row['Nome_Fantasia'].strip()
             if not nome_pdv or nome_pdv.lower() in ['nan', 'none']:
                 nome_pdv = "PDV Prospect"
 
             bairro = row['Bairro'].strip() or "Bairro não informado"
-            cidade = row['Cidade'].strip()
+            cidade = row['Cidade'].strip() or "Cidade não informada"
             endereco = row['Endereco'].strip() or "Endereço não informado"
 
             # Telefone e WhatsApp
@@ -184,7 +261,7 @@ with tab_lista:
             tem_tel = bool(tel_clean and tel.lower() not in ['nan', 'none', 'não informado'])
             tel_link = f"https://wa.me/55{tel_clean}" if tem_tel else "#"
 
-            # Geolocalização
+            # Geolocalização e Maps
             p_lat = row['lat']
             p_lng = row['lon']
             tem_gps = (p_lat is not None) and (p_lng is not None)
@@ -204,14 +281,16 @@ with tab_lista:
                 map_embed_url = None
                 pode_ver_mapa = False
 
+            # Card Visual
             st.markdown(f"""
             <div class="prospect-card">
                 <h3 style="margin-top:0; color:#001489;">🏬 {nome_pdv}</h3>
                 <div style="margin-top: 8px;">
                     <span class="badge-bairro">📍 {bairro}</span>
+                    <span class="badge-cidade">🏙️ {cidade}</span>
                 </div>
                 <div style="margin-top: 8px; font-size: 14px; color: #374151;">
-                    <strong>Endereço:</strong> {endereco} {f'- {cidade}' if cidade else ''}<br>
+                    <strong>Endereço:</strong> {endereco}<br>
                     <strong>Telefone:</strong> {tel if tem_tel else 'Não informado'}
                 </div>
             </div>
@@ -233,25 +312,46 @@ with tab_lista:
                 st.components.v1.iframe(map_embed_url, height=220)
 
             st.markdown("---")
+
+    elif (criterio == "Por Cidade" and cidade_sel != "Selecione uma Cidade...") or \
+         (criterio == "Por Bairro" and bairro_sel != "Selecione um Bairro...") or \
+         (criterio == "Por Nome Fantasia" and nome_busca.strip()) or \
+         (criterio == "Geral (Cidade, Bairro ou Nome)" and termo_geral.strip()):
+        st.warning("Nenhum PDV encontrado para os termos pesquisados.")
     else:
-        st.warning("Nenhum PDV encontrado para os filtros selecionados.")
+        st.info("👆 Selecione ou digite o filtro acima para consultar os alvos.")
 
 # ==============================================================================
-# ABA 2: MAPA GERAL E VISÃO DE CLIENTES PRÓXIMOS
+# ABA 2: MAPA GERAL COM FILTROS GEOGRÁFICOS
 # ==============================================================================
 with tab_mapa:
     st.markdown("### 🗺️ Mapa Panorâmico da Mobilização")
     st.write("Veja onde estão concentrados todos os alvos e trace rotas pelo Google Maps.")
 
-    col_m1, col_m2 = st.columns([2, 2])
+    col_m1, col_m2 = st.columns(2)
     with col_m1:
-        bairro_mapa = st.selectbox("Filtrar Bairro no Mapa:", opcoes_bairros, key="sb_mapa_geral")
+        opcoes_mapa_cid = ["Todas as Cidades"] + cidades_validas
+        cid_mapa_sel = st.selectbox("Filtrar Cidade no Mapa:", opcoes_mapa_cid, key="sb_mapa_cid")
     with col_m2:
-        st.caption("💡 *Dica:* Aproxime ou afaste o mapa com os dedos no celular.")
+        # Se filtrou a cidade, lista apenas bairros daquela cidade
+        if cid_mapa_sel != "Todas as Cidades":
+            bairros_cid = sorted([
+                b for b in df[df['Cidade'] == cid_mapa_sel]['Bairro'].unique() 
+                if str(b).strip() and str(b).lower() not in ['nan', 'none', '']
+            ])
+        else:
+            bairros_cid = bairros_validos
+
+        opcoes_mapa_bairro = ["Todos os Bairros"] + bairros_cid
+        bairro_mapa_sel = st.selectbox("Filtrar Bairro no Mapa:", opcoes_mapa_bairro, key="sb_mapa_bairro")
 
     df_mapa = df.dropna(subset=['lat', 'lon']).copy()
-    if bairro_mapa != "Todos os Bairros":
-        df_mapa = df_mapa[df_mapa['Bairro'] == bairro_mapa]
+    
+    if cid_mapa_sel != "Todas as Cidades":
+        df_mapa = df_mapa[df_mapa['Cidade'] == cid_mapa_sel]
+        
+    if bairro_mapa_sel != "Todos os Bairros":
+        df_mapa = df_mapa[df_mapa['Bairro'] == bairro_mapa_sel]
 
     st.info(f"📍 **{len(df_mapa)}** PDVs geolocalizados exibidos no mapa.")
 
@@ -269,12 +369,14 @@ with tab_mapa:
         for m_idx, m_row in df_mapa.iterrows():
             m_nome = m_row['Nome_Fantasia'].strip() or "PDV Prospect"
             m_bairro = m_row['Bairro'].strip()
+            m_cidade = m_row['Cidade'].strip()
             m_end = m_row['Endereco'].strip()
             rota_url = f"https://www.google.com/maps/dir/?api=1&destination={m_row['lat']},{m_row['lon']}"
 
             col_pdv, col_rota = st.columns([3, 1])
             with col_pdv:
-                st.markdown(f"**{m_nome}** ({m_bairro})<br><small style='color:#64748B;'>{m_end}</small>", unsafe_allow_html=True)
+                loc_txt = f"{m_bairro} - {m_cidade}" if m_cidade else m_bairro
+                st.markdown(f"**{m_nome}** ({loc_txt})<br><small style='color:#64748B;'>{m_end}</small>", unsafe_allow_html=True)
             with col_rota:
                 st.link_button("🚗 Ir até o PDV", rota_url, use_container_width=True, key=f"rota_{m_idx}")
             st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid #E5E7EB;'>", unsafe_allow_html=True)
